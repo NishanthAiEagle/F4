@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Aurum Atelier | Virtual Jewelry Try-On</title>
+  
+  <link rel="stylesheet" href="style.css" />
+
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+</head>
+<body>
+  <div id="app">
+    <div id="video-container">
+      <video id="webcam" autoplay playsinline muted style="display:none;"></video>
+      <canvas id="overlay"></canvas>
+    </div>
+
+    <div id="gesture-indicator">
+      <div id="indicator-dot"></div>
+      <span id="indicator-text">Hand Not Detected</span>
+    </div>
+
+    <header id="controls-hero">
+      <div class="brand-row">
+        <div class="brand-left">
+          <img src="logo.png" alt="Aurum Atelier Logo" class="brand-logo" />
+          <div class="brand-name">Aurum Atelier</div>
+        </div>
+        <div class="action-row">
+          <button id="snapshot-btn" onclick="takeSnapshot()" title="Capture Look">
+             <img src="camera-icon.png" alt="Camera">
+          </button>
+        </div>
+      </div>
+
+      <div class="controls-panel">
+        <div id="jewelry-mode" class="pill-group">
+          <button class="pill" onclick="toggleCategory('gold')">Gold</button>
+          <button class="pill" onclick="toggleCategory('diamond')">Diamond</button>
+          <button id="tryall-btn" class="pill accent" onclick="toggleTryAll()">Try All</button>
+        </div>
+
+        <div id="subcategory-buttons" class="sub-pills" style="display:none;">
+          <button onclick="selectJewelryType('gold_earrings')" class="subpill">Gold Earrings</button>
+          <button onclick="selectJewelryType('gold_necklaces')" class="subpill">Gold Necklaces</button>
+          <button onclick="selectJewelryType('diamond_earrings')" class="subpill">Diamond Earrings</button>
+          <button onclick="selectJewelryType('diamond_necklaces')" class="subpill">Diamond Necklaces</button>
+        </div>
+
+        <div id="jewelry-options" class="carousel-cards" style="display:none;"></div>
+      </div>
+    </header>
+
+    <div id="gallery-modal" role="dialog" aria-labelledby="gallery-title" aria-modal="true">
+      <div class="gallery-content">
+        <span class="close-gallery" onclick="closeGallery()" aria-label="Close Gallery">&times;</span>
+        <h2 id="gallery-title" style="font-family: 'Playfair Display'; color: #d4af37;">Your Collection</h2>
+        <div id="gallery-grid"></div>
+        <div style="margin-top: 20px;">
+          <button class="pill accent" onclick="window.print()">Download as PDF</button>
+          <button class="pill" onclick="closeGallery()" style="margin-left: 10px;">Continue Browsing</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="flash-overlay"></div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
