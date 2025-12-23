@@ -76,13 +76,20 @@
 
     <div id="lightbox-overlay">
         <span class="close-lightbox" onclick="closeLightbox()">&times;</span>
-        
         <div class="lightbox-main">
             <img id="lightbox-image" src="" alt="Zoomed View">
         </div>
-        
-        <div class="lightbox-strip" id="lightbox-thumbs">
-            </div>
+        <div class="lightbox-strip" id="lightbox-thumbs"></div>
+    </div>
+
+    <div id="process-overlay">
+        <div class="process-box">
+            <div id="process-spinner" class="spinner"></div>
+            
+            <div id="process-success" style="display:none; font-size: 50px;">✅</div>
+            
+            <p id="process-text" style="margin-top:15px; font-size:18px;">Packaging Collection...</p>
+        </div>
     </div>
 
     <div id="flash-overlay"></div>

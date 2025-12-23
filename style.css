@@ -19,7 +19,7 @@ body {
   user-select: none;
 }
 
-/* --- VIDEO & CANVAS LAYERS --- */
+/* --- 1. VIDEO & CANVAS LAYERS --- */
 #video-container { 
   position: fixed; 
   inset: 0; 
@@ -44,7 +44,7 @@ body {
   z-index: 1; /* Above video */
 }
 
-/* --- LOADING STATUS --- */
+/* --- 2. LOADING STATUS --- */
 #loading-status {
     position: fixed;
     top: 50%; left: 50%;
@@ -59,7 +59,7 @@ body {
     z-index: 500;
 }
 
-/* --- GESTURE INDICATOR --- */
+/* --- 3. GESTURE INDICATOR --- */
 #gesture-indicator {
   position: fixed; 
   top: 20px; 
@@ -84,7 +84,7 @@ body {
   transition: background 0.3s ease;
 }
 
-/* --- TOP BRANDING BAR --- */
+/* --- 4. TOP BRANDING BAR --- */
 #controls-hero {
   position: fixed;
   top: 0; left: 0; right: 0;
@@ -120,7 +120,7 @@ body {
 
 .action-row button:hover { transform: scale(1.1); background: rgba(255,255,255,0.2); }
 
-/* --- CONTROLS PANEL (BOTTOM) --- */
+/* --- 5. CONTROLS PANEL (BOTTOM) --- */
 .controls-panel {
   position: fixed;
   bottom: 25px; 
@@ -174,7 +174,7 @@ body {
   100% { transform: scale(1); }
 }
 
-/* --- JEWELRY SELECTOR CAROUSEL --- */
+/* --- 6. JEWELRY SELECTOR CAROUSEL --- */
 .carousel-cards {
   display: flex; 
   gap: 15px; 
@@ -198,7 +198,7 @@ body {
 
 .thumb-btn:hover { border-color: var(--accent); transform: translateY(-5px); }
 
-/* --- GALLERY MODAL (GRID) --- */
+/* --- 7. GALLERY MODAL (GRID) --- */
 #gallery-modal {
   position: fixed; 
   inset: 0; 
@@ -261,7 +261,7 @@ body {
   line-height: 1;
 }
 
-/* --- LIGHTBOX (ZOOM WITH STRIP) --- */
+/* --- 8. LIGHTBOX (ZOOM WITH STRIP) --- */
 #lightbox-overlay {
     position: fixed;
     top: 0; left: 0; width: 100%; height: 100%;
@@ -336,7 +336,38 @@ body {
     z-index: 2001;
 }
 
-/* --- FLASH EFFECT --- */
+/* --- 9. PROCESS OVERLAY (ZIP SPINNER) --- */
+#process-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.9);
+    z-index: 4000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+}
+
+.process-box {
+    text-align: center;
+    color: white;
+}
+
+.spinner {
+    width: 50px;
+    height: 50px;
+    margin: 0 auto;
+    border: 5px solid rgba(255,255,255,0.1);
+    border-top: 5px solid var(--accent);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* --- 10. FLASH EFFECT --- */
 #flash-overlay {
   position: fixed; 
   inset: 0; 

@@ -126,7 +126,6 @@ faceMesh.setOptions({ refineLandmarks: true, minDetectionConfidence: 0.5, minTra
 faceMesh.onResults((results) => {
   isProcessingFace = false;
   
-  // Hide loading text once we get first result
   if(loadingStatus.style.display !== 'none') {
       loadingStatus.style.display = 'none';
   }
@@ -137,12 +136,7 @@ faceMesh.onResults((results) => {
   canvasCtx.save();
   canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
   
-  // Mirror logic for drawing the jewelry
-  // We do NOT draw the video here anymore, because the video element is visible behind the canvas.
-  // This improves performance and ensures the camera feed is always visible.
-  
-  // We only need to mirror the COORDINATES for the jewelry drawing.
-  // Actually, simplest way: Mirror the canvas context so we draw jewelry mirrored on top of the mirrored video.
+  // Mirror logic for drawing jewelry
   canvasCtx.translate(canvasElement.width, 0);
   canvasCtx.scale(-1, 1);
 
@@ -171,7 +165,6 @@ faceMesh.onResults((results) => {
 });
 
 /* ---------- FAST CAMERA INIT & LOOP ---------- */
-
 async function startCameraFast() {
     try {
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -184,11 +177,10 @@ async function startCameraFast() {
         
         videoElement.srcObject = stream;
         
-        // Wait for video to actually play before starting AI detection
         videoElement.onloadeddata = () => {
             videoElement.play();
             loadingStatus.textContent = "Loading AI Models...";
-            detectLoop(); // Start the AI loop
+            detectLoop(); 
         };
     } catch (err) {
         console.error("Camera Error:", err);
@@ -198,27 +190,19 @@ async function startCameraFast() {
 }
 
 async function detectLoop() {
-    // Only send data if video is ready
     if (videoElement.readyState >= 2) {
-        
-        // Send to Face Mesh
         if (!isProcessingFace) {
             isProcessingFace = true;
             await faceMesh.send({image: videoElement});
         }
-        
-        // Send to Hands
         if (!isProcessingHand) {
             isProcessingHand = true;
             await hands.send({image: videoElement});
         }
     }
-    
-    // Request next frame
     requestAnimationFrame(detectLoop);
 }
 
-// Replaces the old init()
 window.onload = startCameraFast;
 
 /* ---------- NAVIGATION & SELECTION ---------- */
@@ -321,26 +305,15 @@ async function runAutoStep() {
 }
 
 function captureToGallery() {
-  // We need to draw the video onto the canvas strictly for the snapshot
-  // because typically we only draw jewelry. 
-  // For the snapshot, we combine them.
   const tempCanvas = document.createElement('canvas');
   tempCanvas.width = videoElement.videoWidth;
   tempCanvas.height = videoElement.videoHeight;
   const tempCtx = tempCanvas.getContext('2d');
   
-  // Draw Video (Mirrored)
   tempCtx.translate(tempCanvas.width, 0);
   tempCtx.scale(-1, 1);
   tempCtx.drawImage(videoElement, 0, 0);
   
-  // Draw current overlay (Jewelry)
-  // The overlay canvas is already mirrored coordinates, so we draw it directly? 
-  // No, the overlay canvas has transparent background.
-  // We need to un-mirror to draw it on top of the already mirrored video context?
-  // Let's just draw the current canvasElement on top.
-  // Since we flipped the context, drawing the canvas (which is visually correct) might flip it again.
-  // Reset transform to draw the overlay exactly as it appears on screen
   tempCtx.setTransform(1, 0, 0, 1, 0, 0); 
   tempCtx.drawImage(canvasElement, 0, 0);
   
@@ -419,12 +392,23 @@ function closeGallery() {
   document.getElementById('gallery-modal').style.display = 'none';
 }
 
-/* ---------- ZIP DOWNLOAD ---------- */
+/* ---------- ZIP DOWNLOAD WITH PROCESS UI ---------- */
 function downloadAllAsZip() {
     if (autoSnapshots.length === 0) {
         alert("No images to download!");
         return;
     }
+
+    // 1. Show Loading Overlay
+    const overlay = document.getElementById('process-overlay');
+    const spinner = document.getElementById('process-spinner');
+    const success = document.getElementById('process-success');
+    const text = document.getElementById('process-text');
+
+    overlay.style.display = 'flex';
+    spinner.style.display = 'block';
+    success.style.display = 'none';
+    text.innerText = "Packaging Collection...";
 
     const zip = new JSZip();
     const folder = zip.folder("Aurum_Collection");
@@ -434,9 +418,20 @@ function downloadAllAsZip() {
         folder.file(`look_${index + 1}.png`, base64Data, {base64: true});
     });
 
+    // 2. Generate and Download
     zip.generateAsync({type:"blob"})
     .then(function(content) {
         saveAs(content, "Aurum_Collection.zip");
+
+        // 3. Update UI to Success
+        spinner.style.display = 'none';
+        success.style.display = 'block';
+        text.innerText = "Download Started!";
+
+        // 4. Close after 2 seconds
+        setTimeout(() => {
+            overlay.style.display = 'none';
+        }, 2000);
     });
 }
 
