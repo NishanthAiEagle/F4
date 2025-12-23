@@ -286,7 +286,7 @@ function takeSnapshot() {
     showGallery();
 }
 
-/* ---------- GALLERY & LIGHTBOX (ZOOM WITH STRIP) ---------- */
+/* ---------- GALLERY & LIGHTBOX ---------- */
 function showGallery() {
   const modal = document.getElementById('gallery-modal');
   const grid = document.getElementById('gallery-grid');
@@ -302,7 +302,6 @@ function showGallery() {
     img.src = src;
     img.className = "gallery-thumb";
     
-    // Pass INDEX so we know position
     img.onclick = () => openLightbox(index);
     
     wrapper.appendChild(img);
@@ -317,11 +316,9 @@ function openLightbox(selectedIndex) {
     const lightboxImg = document.getElementById('lightbox-image');
     const strip = document.getElementById('lightbox-thumbs');
     
-    // 1. Show main image
     lightboxImg.src = autoSnapshots[selectedIndex];
     
-    // 2. Generate Strip
-    strip.innerHTML = ''; // Clear old thumbs
+    strip.innerHTML = '';
     
     autoSnapshots.forEach((src, idx) => {
         const thumb = document.createElement('img');
@@ -329,10 +326,8 @@ function openLightbox(selectedIndex) {
         thumb.className = "strip-thumb";
         if(idx === selectedIndex) thumb.classList.add('active');
         
-        // Click strip thumb to switch main image
         thumb.onclick = () => {
             lightboxImg.src = src;
-            // Update active styling
             document.querySelectorAll('.strip-thumb').forEach(t => t.classList.remove('active'));
             thumb.classList.add('active');
         };
@@ -351,11 +346,12 @@ function closeGallery() {
   document.getElementById('gallery-modal').style.display = 'none';
 }
 
-/* ---------- INITIALIZATION ---------- */
-window.onload = init;
-window.toggleCategory = toggleCategory;
-window.selectJewelryType = selectJewelryType;
-window.toggleTryAll = toggleTryAll;
-window.closeGallery = closeGallery;
-window.closeLightbox = closeLightbox;
-window.takeSnapshot = takeSnapshot;
+/* ---------- ZIP DOWNLOAD (NEW) ---------- */
+function downloadAllAsZip() {
+    if (autoSnapshots.length === 0) {
+        alert("No images to download!");
+        return;
+    }
+
+    const zip = new JSZip();
+    const folder = zip.folder("Aurum_Collection");
