@@ -1,19 +1,35 @@
-/* script.js - Aurum Atelier: High-Speed AR & Auto-Try Integration */
+/* script.js - Aurum Atelier: Google Drive Integration (Fixed) */
 
-const IMAGE_COUNTS = {
-  gold_earrings: 5, 
-  gold_necklaces: 5,
-  diamond_earrings: 5, 
-  diamond_necklaces: 6
+/* --- GOOGLE DRIVE CONFIGURATION --- */
+const API_KEY = "AIzaSyBhi05HMVGg90dPP91zG1RZtNxm-d6hnQw"; 
+
+const DRIVE_FOLDERS = {
+  diamond_earrings: "1N0jndAEIThUuuNAJpvuRMGsisIaXCgMZ",
+  diamond_necklaces: "1JGV8T03YdzjfW0Dyt9aMPybH8V9-gEhw",
+  gold_earrings: "1GMZpcv4A1Gy2xiaIC1XPG_IOAt9NrDpi",
+  gold_necklaces: "1QIvX-PrSVrK9gz-TEksqiKlXPGv2hsS5"
 };
+
+/* Asset Cache to store fetched Drive data */
+const JEWELRY_ASSETS = {};
+const PRELOADED_IMAGES = {}; 
+
+/* --- 1. PRELOAD WATERMARK --- */
+const watermarkImg = new Image();
+watermarkImg.src = 'logo_watermark.png'; 
 
 /* DOM Elements */
 const videoElement = document.getElementById('webcam');
 const canvasElement = document.getElementById('overlay');
 const canvasCtx = canvasElement.getContext('2d');
-const indicatorDot = document.getElementById('indicator-dot');
-const indicatorText = document.getElementById('indicator-text');
 const loadingStatus = document.getElementById('loading-status');
+
+/* --- HIDE GESTURE INDICATOR --- */
+const gestureIndicator = document.getElementById('gesture-indicator');
+if (gestureIndicator) {
+    gestureIndicator.style.display = 'none';
+}
+const indicatorDot = document.getElementById('indicator-dot');
 
 /* App State */
 let earringImg = null, necklaceImg = null, currentType = '';
@@ -30,41 +46,102 @@ let autoTryRunning = false;
 let autoSnapshots = [];
 let autoTryIndex = 0;
 let autoTryTimeout = null;
+let currentPreviewData = { url: null, name: 'aurum_look.png' }; 
 
-/* --- Asset Preloading Cache --- */
-const preloadedAssets = {};
+/* --- GOOGLE DRIVE API FETCH (UPDATED FIX) --- */
+async function fetchFromDrive(category) {
+    // If we already have the data, don't fetch again
+    if (JEWELRY_ASSETS[category]) return;
 
+    const folderId = DRIVE_FOLDERS[category];
+    if (!folderId) {
+        console.error(`No Folder ID found for category: ${category}`);
+        return;
+    }
+
+    loadingStatus.style.display = 'block';
+    loadingStatus.textContent = "Fetching Designs...";
+
+    try {
+        // CHANGED: We now request 'thumbnailLink' in the fields
+        const query = `'${folderId}' in parents and trashed = false and mimeType contains 'image/'`;
+        const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name,thumbnailLink)&key=${API_KEY}`;
+        
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (data.error) {
+            throw new Error(data.error.message);
+        }
+
+        // Map Drive files using the High-Res Thumbnail Hack
+        JEWELRY_ASSETS[category] = data.files.map(file => {
+            // If thumbnailLink exists, replace the size parameter (=s220) with (=s3000) to get full resolution
+            // This bypasses many CORS issues associated with the standard export=view link
+            const highResSource = file.thumbnailLink 
+                ? file.thumbnailLink.replace(/=s\d+$/, "=s3000") 
+                : `https://drive.google.com/uc?export=view&id=${file.id}`;
+
+            return {
+                id: file.id,
+                name: file.name,
+                src: highResSource
+            };
+        });
+
+        loadingStatus.style.display = 'none';
+
+    } catch (err) {
+        console.error("Drive API Error:", err);
+        loadingStatus.textContent = "Error Loading Images";
+        alert("Failed to load images from Google Drive. Check console (F12) for details.");
+    }
+}
+
+/* --- PRELOADER --- */
 async function preloadCategory(type) {
-  if (preloadedAssets[type]) return; 
-  preloadedAssets[type] = [];
-  const count = IMAGE_COUNTS[type];
-  
-  for(let i=1; i<=count; i++) {
-    const src = `${type}/${i}.png`;
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.src = src;
-    preloadedAssets[type].push(img);
-  }
+    // 1. Ensure we have the file list from Drive
+    await fetchFromDrive(type);
+    
+    if (!JEWELRY_ASSETS[type]) return;
+
+    // 2. Preload Image Objects if not done yet
+    if (!PRELOADED_IMAGES[type]) {
+        PRELOADED_IMAGES[type] = [];
+        const files = JEWELRY_ASSETS[type];
+
+        const promises = files.map(file => {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.crossOrigin = 'anonymous'; // Important for Canvas
+                img.onload = () => resolve(img);
+                img.onerror = () => {
+                    console.warn(`Failed to load image: ${file.name}`);
+                    resolve(null); // Resolve even on error to keep moving
+                };
+                img.src = file.src;
+                PRELOADED_IMAGES[type].push(img);
+            });
+        });
+
+        // Wait for all images in this category to load
+        loadingStatus.style.display = 'block';
+        loadingStatus.textContent = "Downloading Assets...";
+        await Promise.all(promises);
+        loadingStatus.style.display = 'none';
+    }
 }
 
 /* --- UI Indicator Helpers --- */
 function updateHandIndicator(detected) {
-  if (detected) {
-    indicatorDot.style.background = "#00ff88"; 
-    indicatorText.textContent = "Hand Detected - Swipe to Browse";
-  } else {
-    indicatorDot.style.background = "#555"; 
-    indicatorText.textContent = "Show Hand to Control";
-    previousHandX = null; 
-  }
+  if (!detected) previousHandX = null; 
 }
 
 function flashIndicator(color) {
-    indicatorDot.style.background = color;
-    setTimeout(() => { 
-        indicatorDot.style.background = "#00ff88";
-    }, 300);
+    if(indicatorDot && indicatorDot.style.display !== 'none') {
+        indicatorDot.style.background = color;
+        setTimeout(() => { indicatorDot.style.background = "#00ff88"; }, 300);
+    }
 }
 
 /* ---------- HAND DETECTION (SWIPE LOGIC) ---------- */
@@ -126,7 +203,7 @@ faceMesh.setOptions({ refineLandmarks: true, minDetectionConfidence: 0.5, minTra
 faceMesh.onResults((results) => {
   isProcessingFace = false;
   
-  if(loadingStatus.style.display !== 'none') {
+  if(loadingStatus.style.display !== 'none' && loadingStatus.textContent === "Loading AI Models...") {
       loadingStatus.style.display = 'none';
   }
 
@@ -136,7 +213,6 @@ faceMesh.onResults((results) => {
   canvasCtx.save();
   canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
   
-  // Mirror logic for drawing jewelry
   canvasCtx.translate(canvasElement.width, 0);
   canvasCtx.scale(-1, 1);
 
@@ -207,12 +283,15 @@ window.onload = startCameraFast;
 
 /* ---------- NAVIGATION & SELECTION ---------- */
 function navigateJewelry(dir) {
-  if (!currentType || !preloadedAssets[currentType]) return;
+  if (!currentType || !PRELOADED_IMAGES[currentType]) return;
   
-  const list = preloadedAssets[currentType];
+  const list = PRELOADED_IMAGES[currentType];
   let currentImg = currentType.includes('earrings') ? earringImg : necklaceImg;
   
   let idx = list.indexOf(currentImg);
+  // If current image not found (e.g. first run), start at -1
+  if (idx === -1) idx = 0; 
+
   let nextIdx = (idx + dir + list.length) % list.length;
   
   const nextItem = list[nextIdx];
@@ -220,25 +299,34 @@ function navigateJewelry(dir) {
   else necklaceImg = nextItem;
 }
 
-function selectJewelryType(type) {
+// Updated selectJewelryType to be async to handle fetching
+async function selectJewelryType(type) {
   currentType = type;
-  preloadCategory(type); 
+  
+  // Wait for data and images to load
+  await preloadCategory(type); 
   
   const container = document.getElementById('jewelry-options');
   container.innerHTML = '';
   container.style.display = 'flex';
   
-  for(let i=1; i<=IMAGE_COUNTS[type]; i++) {
+  // Use loaded assets
+  const files = JEWELRY_ASSETS[type];
+  if (!files) return;
+
+  files.forEach((file, i) => {
     const btnImg = new Image();
-    btnImg.src = `${type}/${i}.png`;
+    btnImg.src = file.src; // Using the Drive URL
+    btnImg.crossOrigin = 'anonymous';
     btnImg.className = "thumb-btn"; 
     btnImg.onclick = () => {
-        const fullImg = preloadedAssets[type][i-1];
+        // PRELOADED_IMAGES corresponds index-wise to JEWELRY_ASSETS
+        const fullImg = PRELOADED_IMAGES[type][i];
         if (type.includes('earrings')) earringImg = fullImg;
         else necklaceImg = fullImg;
     };
     container.appendChild(btnImg);
-  }
+  });
 }
 
 function toggleCategory(cat) {
@@ -287,7 +375,7 @@ function stopAutoTry() {
 async function runAutoStep() {
   if (!autoTryRunning) return;
 
-  const assets = preloadedAssets[currentType];
+  const assets = PRELOADED_IMAGES[currentType];
   if (!assets || autoTryIndex >= assets.length) {
     stopAutoTry();
     return;
@@ -304,18 +392,76 @@ async function runAutoStep() {
   }, 1500); 
 }
 
+/* ---------- CAPTURE + WATERMARK + TEXT (FROM DRIVE FILENAME) ---------- */
 function captureToGallery() {
   const tempCanvas = document.createElement('canvas');
   tempCanvas.width = videoElement.videoWidth;
   tempCanvas.height = videoElement.videoHeight;
   const tempCtx = tempCanvas.getContext('2d');
   
+  // 1. Draw Video (Mirrored)
   tempCtx.translate(tempCanvas.width, 0);
   tempCtx.scale(-1, 1);
   tempCtx.drawImage(videoElement, 0, 0);
   
+  // 2. Draw Jewelry Overlay (Reset transform first)
   tempCtx.setTransform(1, 0, 0, 1, 0, 0); 
-  tempCtx.drawImage(canvasElement, 0, 0);
+  try {
+      tempCtx.drawImage(canvasElement, 0, 0);
+  } catch(e) {
+      console.warn("Canvas Tainted - CORS issue with Drive Images possibly.");
+  }
+
+  // --- DYNAMIC NAME GENERATION ---
+  let itemName = "Aurum Look";
+  let itemFilename = "aurum_look.png";
+  
+  if (currentType && PRELOADED_IMAGES[currentType]) {
+      const list = PRELOADED_IMAGES[currentType];
+      let currentImg = currentType.includes('earrings') ? earringImg : necklaceImg;
+      let idx = list.indexOf(currentImg);
+      
+      // Look up original filename from ASSETS using index
+      if(idx >= 0 && JEWELRY_ASSETS[currentType][idx]) {
+          const rawFilename = JEWELRY_ASSETS[currentType][idx].name;
+          
+          // Clean up filename for display (remove extension, replace _ with space)
+          const nameOnly = rawFilename.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ");
+          
+          // Capitalize first letters
+          itemName = nameOnly.replace(/\b\w/g, l => l.toUpperCase());
+          
+          // Create download filename
+          itemFilename = `Aurum_${rawFilename}`;
+      }
+  }
+
+  // 3. Draw Text (Bottom Left)
+  const padding = 20; 
+  tempCtx.font = "bold 24px Montserrat, sans-serif";
+  tempCtx.textAlign = "left";
+  tempCtx.textBaseline = "bottom";
+  
+  // Text Shadow
+  tempCtx.fillStyle = "rgba(0,0,0,0.8)";
+  tempCtx.fillText(itemName, padding + 2, tempCanvas.height - padding + 2);
+  
+  // Text Main
+  tempCtx.fillStyle = "#ffffff";
+  tempCtx.fillText(itemName, padding, tempCanvas.height - padding);
+
+  // 4. Draw Watermark (Bottom Right)
+  if (watermarkImg.complete && watermarkImg.naturalWidth > 0) {
+      const wWidth = tempCanvas.width * 0.25; 
+      const wHeight = (watermarkImg.height / watermarkImg.width) * wWidth;
+      
+      const wX = tempCanvas.width - wWidth - padding;
+      const wY = tempCanvas.height - wHeight - padding;
+      
+      tempCtx.globalAlpha = 0.9; 
+      tempCtx.drawImage(watermarkImg, wX, wY, wWidth, wHeight);
+      tempCtx.globalAlpha = 1.0;
+  }
   
   const dataUrl = tempCanvas.toDataURL('image/png');
   autoSnapshots.push(dataUrl);
@@ -325,11 +471,57 @@ function captureToGallery() {
     flash.classList.add('active');
     setTimeout(() => flash.classList.remove('active'), 100);
   }
+  
+  return { url: dataUrl, name: itemFilename }; 
 }
 
 function takeSnapshot() {
-    captureToGallery();
-    showGallery();
+    const shotData = captureToGallery();
+    openSinglePreview(shotData);
+}
+
+/* ---------- SINGLE PREVIEW ---------- */
+function openSinglePreview(shotData) {
+    currentPreviewData = shotData; 
+    
+    const modal = document.getElementById('preview-modal');
+    const img = document.getElementById('preview-image');
+    
+    img.src = shotData.url;
+    modal.style.display = 'flex';
+}
+
+function closePreview() {
+    document.getElementById('preview-modal').style.display = 'none';
+}
+
+function downloadSingleSnapshot() {
+    if(currentPreviewData && currentPreviewData.url) {
+        saveAs(currentPreviewData.url, currentPreviewData.name);
+    }
+}
+
+async function shareSingleSnapshot() {
+    if(!currentPreviewData.url) return;
+    
+    const response = await fetch(currentPreviewData.url);
+    const blob = await response.blob();
+    
+    const file = new File([blob], currentPreviewData.name, { type: "image/png" });
+    
+    if (navigator.share) {
+        try {
+            await navigator.share({
+                title: 'My Aurum Atelier Look',
+                text: 'Check out this jewelry I tried on virtually!',
+                files: [file]
+            });
+        } catch (err) {
+            console.warn("Share failed:", err);
+        }
+    } else {
+        alert("Sharing is not supported on this browser. Please use Download.");
+    }
 }
 
 /* ---------- GALLERY & LIGHTBOX ---------- */
@@ -392,14 +584,13 @@ function closeGallery() {
   document.getElementById('gallery-modal').style.display = 'none';
 }
 
-/* ---------- ZIP DOWNLOAD WITH PROCESS UI ---------- */
+/* ---------- ZIP DOWNLOAD ---------- */
 function downloadAllAsZip() {
     if (autoSnapshots.length === 0) {
         alert("No images to download!");
         return;
     }
 
-    // 1. Show Loading Overlay
     const overlay = document.getElementById('process-overlay');
     const spinner = document.getElementById('process-spinner');
     const success = document.getElementById('process-success');
@@ -418,17 +609,14 @@ function downloadAllAsZip() {
         folder.file(`look_${index + 1}.png`, base64Data, {base64: true});
     });
 
-    // 2. Generate and Download
     zip.generateAsync({type:"blob"})
     .then(function(content) {
         saveAs(content, "Aurum_Collection.zip");
 
-        // 3. Update UI to Success
         spinner.style.display = 'none';
         success.style.display = 'block';
         text.innerText = "Download Started!";
 
-        // 4. Close after 2 seconds
         setTimeout(() => {
             overlay.style.display = 'none';
         }, 2000);
@@ -443,3 +631,16 @@ window.closeGallery = closeGallery;
 window.closeLightbox = closeLightbox;
 window.takeSnapshot = takeSnapshot;
 window.downloadAllAsZip = downloadAllAsZip;
+window.closePreview = closePreview;
+window.downloadSingleSnapshot = downloadSingleSnapshot;
+window.shareSingleSnapshot = shareSingleSnapshot;
+
+/* ===========================
+   DISABLE RIGHT CLICK & DEV TOOLS
+   ============================ */
+document.addEventListener('contextmenu', (e) => e.preventDefault());
+document.onkeydown = function(e) {
+  if (e.keyCode === 123) return false; // F12
+  if (e.ctrlKey && e.shiftKey && (e.keyCode === 73 || e.keyCode === 74 || e.keyCode === 67 || e.keyCode === 75)) return false;
+  if (e.ctrlKey && e.keyCode === 85) return false; // Ctrl+U
+};
